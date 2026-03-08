@@ -1,0 +1,21 @@
+pip install 
+pip install fastapi 
+pip install uvicorn 
+pip install supabase 
+pip install python-dotenv 
+pip install pydantic 
+pip install joblib 
+pip install pandas 
+pip install xgboost 
+pip install catboost 
+pip install scikit-learn
+pip install google-generativeai
+pip install pytest httpx
+pip install apscheduler 
+pip install scikit-learn==1.7.2
+pip install sentry-sdk
+pip install "sentry-sdk" "fastapi"
+pip install PyMuPDF python-multipart
+pip install slowapi
+pip install redis
+pip install reportlab

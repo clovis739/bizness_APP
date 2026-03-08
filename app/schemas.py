@@ -1,0 +1,61 @@
+
+
+from pydantic import BaseModel
+
+# ==========================================
+# AUTHENTICATION SCHEMAS
+# ==========================================
+
+class SMERegistration(BaseModel):
+    name: str
+    email: str 
+    password: str
+
+class SMELogin(BaseModel):
+    email: str
+    password: str
+
+class ForgotPassword(BaseModel):
+    email: str
+
+class ResetPassword(BaseModel):
+    email: str
+    otp: str
+    new_password: str
+
+# ==========================================
+# BUSINESS SCHEMAS
+# ==========================================
+
+class BusinessRegistration(BaseModel):
+    sme_id: str                 
+    owner_full_name: str
+    phone: str
+    business_name: str
+    industry: str               
+    region: str                 
+    sector: str                 
+    startup_capital_cfa: float
+    employees: int
+    years_of_experience: int
+    transport_cost_percentage: float
+    energy_cost_percentage: float
+
+    # ==========================================
+# AI PREDICTION SCHEMAS
+# ==========================================
+
+class PredictionRequest(BaseModel):
+    business_id: str
+
+    # ==========================================
+# COMMUNICATION SCHEMAS
+# ==========================================
+class SubscribeRequest(BaseModel):
+    email: str
+
+class ContactRequest(BaseModel):
+    name: str
+    email: str
+    subject: str
+    message: str

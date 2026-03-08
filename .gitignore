@@ -1,0 +1,12 @@
+
+# .gitignore
+.env
+__pycache__/
+venv/
+bizness/
+.pytest_cache/
+# Ignore ML training data and logs
+*.csv
+catboost_info/
+logs/
+.ipynb_checkpoints/
