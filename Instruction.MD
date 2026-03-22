@@ -192,3 +192,16 @@ python -m pytest -v
 
 ---
 
+As your Lead Architect, here is the exact blueprint for how we will build this securely. We will use the industry-standard Token Verification Flow:
+
+Your Next.js frontend opens the Google popup.
+
+The user clicks their Google account.
+
+Google hands your frontend a secure Access Token.
+
+Your frontend sends that token to your FastAPI backend.
+
+Your backend securely asks Google: "Who does this token belong to?"
+
+Your backend checks Supabase, creates the user (if new), sets the HTTP-Only cookie, and logs them in!

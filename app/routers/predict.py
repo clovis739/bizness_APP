@@ -1,7 +1,3 @@
-
-
-
-
 import json
 from io import BytesIO
 from fastapi.responses import StreamingResponse
@@ -9,7 +5,7 @@ from reportlab.lib.pagesizes import letter
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
 from reportlab.lib.styles import getSampleStyleSheet 
 from fastapi import UploadFile, File 
-from fastapi import APIRouter, HTTPException, Request 
+from fastapi import APIRouter, HTTPException, Request, BackgroundTasks, Depends
 from app.database import supabase
 from app.schemas import PredictionRequest
 from app.services.ml_service import run_predictions
@@ -17,6 +13,8 @@ from app.services.llm_service import generate_business_report
 from app.services.llm_service import extract_ml_features_from_pdf
 from app.limiter import limiter 
 from app.redis_client import redis_db 
+from app.routers.communication import send_html_email
+from app.routers.dashboard import get_current_user # Our secure cookie bouncer!
 
 router = APIRouter(
     prefix="/api/v1/predict",
@@ -27,10 +25,13 @@ router = APIRouter(
 # PROTECTED AI GENERATION ENDPOINT WITH CACHING
 # ==========================================
 @router.post("/generate")
-@limiter.limit("100/minute") # 🛡️ LIMITER: Adjust this to "5/day" for production
+@limiter.limit("1/minute") 
+# 🛡️ LIMITER: Adjust this to "5/day" for production
 def generate_prediction(
     request: Request, 
-    payload: PredictionRequest 
+    payload: PredictionRequest,                    # <-- FIXED: Added missing comma
+    background_tasks: BackgroundTasks,             
+    current_user: dict = Depends(get_current_user) 
 ):
     """
     Checks the Redis cache first. If no cache exists, runs the ML & Gemini models,
@@ -95,10 +96,8 @@ def generate_prediction(
             "growth_rate": 0.0,
             "chart_data": ai_payload.get("chart_data", {}),
             "full_report": ai_payload 
-            # We now save the entire AI text!
         }
-        
-        supabase.table("growth_forecast").insert(growth_insert).execute()
+        # FIXED: Removed the duplicate insert command that was here
         supabase.table("growth_forecast").insert(growth_insert).execute()
 
         # Step G: Prepare the final comprehensive response
@@ -115,41 +114,84 @@ def generate_prediction(
         # 💾 SAVE TO CACHE FOR NEXT TIME
         # ==========================================
         if redis_db:
-            # Save to Redis for 24 hours (86400 seconds)
             redis_db.setex(
                 name=cache_key, 
                 time=86400, 
                 value=json.dumps(final_response) 
             )
 
+        # ==========================================
+        # 📩 NOTIFICATION SYSTEM: CHECK PREFERENCES & SEND
+        # ==========================================
+        # 1. Fetch preferences from the user's account
+        user_prefs_res = supabase.table("sme").select("preferences").eq("sme_id", current_user["sme_id"]).execute()
+        prefs_data = user_prefs_res.data[0].get("preferences") or {}
+        notifs = prefs_data.get("notifs", {})
+
+        # 2. Only send the email if they didn't toggle it off!
+        if notifs.get("prediction_complete", True) == True:
+            user_email = current_user["email"]
+            user_name = current_user["name"]
+            
+            # The beautifully branded HTML email
+            email_html = f"""
+            <html>
+                <body style="font-family: Arial, sans-serif; padding: 20px; background: #f8f9fa;">
+                    <div style="max-w: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; border-top: 5px solid #476DDC;">
+                        <h2 style="color: #111827;">Your AI Prediction is Ready! 🚀</h2>
+                        <p style="color: #4b5563;">Hello {user_name},</p>
+                        <p style="color: #4b5563;">The AI has successfully analyzed your business data and generated your MIT-Standard Business Plan and profit forecast.</p>
+                        <a href="http://localhost:3000/history" style="display: inline-block; background-color: #476DDC; color: white; text-decoration: none; padding: 12px 24px; border-radius: 8px; font-weight: bold; margin-top: 10px;">View Your Report</a>
+                    </div>
+                </body>
+            </html>
+            """
+            # Send quietly in the background
+            background_tasks.add_task(send_html_email, user_email, "Your AI Business Prediction is Ready!", email_html)
+
         return final_response
 
     except Exception as e:
+        print(f"🔥 MASSIVE CRASH LOG: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Prediction Endpoint Error: {str(e)}")
 
-        
+
+# ==========================================
+# PATCHED: SECURE PREDICTION HISTORY ENDPOINT
+# ==========================================
 @router.get("/history/{business_id}")
-def get_prediction_history(business_id: str):
+def get_prediction_history(business_id: str, current_user: dict = Depends(get_current_user)):
     """
     Fetches all past AI predictions and financial forecasts for a specific business.
-    This will be used to populate the Entrepreneur's Next.js Dashboard.
+    SECURED: Checks if the current user actually owns the requested business_id.
     """
     try:
-        # Step A: Fetch all past survival predictions for this business
+        sme_id = current_user["sme_id"]
+
+        # 🛡️ SECURITY CHECK 1: Does this user own an owner_profile?
+        owner_res = supabase.table("owner").select("owner_id").eq("sme_id", sme_id).execute()
+        if len(owner_res.data) == 0:
+            raise HTTPException(status_code=403, detail="Access Denied: No owner profile found.")
+        owner_id = owner_res.data[0]["owner_id"]
+
+        # 🛡️ SECURITY CHECK 2: Does this business belong to this owner?
+        biz_res = supabase.table("business").select("business_id").eq("owner_id", owner_id).eq("business_id", business_id).execute()
+        if len(biz_res.data) == 0:
+            raise HTTPException(status_code=403, detail="Access Denied: You do not own this business data.")
+
+        # If they pass the checks, fetch their private data securely
         surv_res = supabase.table("survival_prediction") \
             .select("*") \
             .eq("business_id", business_id) \
             .order("created_at", desc=True) \
             .execute()
             
-        # Step B: Fetch all past profit forecasts for this business
         growth_res = supabase.table("growth_forecast") \
             .select("*") \
             .eq("business_id", business_id) \
             .order("created_at", desc=True) \
             .execute()
 
-        # Step C: Combine and return the data
         return {
             "status": "Success",
             "message": "Prediction history retrieved successfully!",
@@ -160,34 +202,61 @@ def get_prediction_history(business_id: str):
             }
         }
 
+    except HTTPException as he:
+        # Pass through our security HTTP exceptions
+        raise he
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Database Error: Could not fetch history. {str(e)}")
 
-
+# ==========================================
+# PATCHED: SECURE PDF UPLOAD ENDPOINT
+# ==========================================
 @router.post("/upload-pdf")
-async def analyze_pdf_business_plan(business_id: str, file: UploadFile = File(...)):
+async def analyze_pdf_business_plan(
+    business_id: str, 
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user) # 🛡️ Requires login
+):
     """
-    Allows a user to upload a PDF Business Plan or Financial Statement.
-    The AI extracts the data and automatically runs the Machine Learning prediction!
+    Allows a user to upload a PDF Business Plan.
+    SECURED: Enforces strict 5MB size limits, MIME-type verification, and ownership checks.
     """
-    if not file.filename.endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files are allowed.")
-        
     try:
-        # 1. Read the uploaded file into memory
-        pdf_bytes = await file.read()
+        sme_id = current_user["sme_id"]
+
+        # 🛡️ SECURITY CHECK 1: Ownership (IDOR Protection)
+        owner_res = supabase.table("owner").select("owner_id").eq("sme_id", sme_id).execute()
+        if len(owner_res.data) == 0:
+            raise HTTPException(status_code=403, detail="Access Denied.")
+            
+        biz_res = supabase.table("business").select("business_id").eq("owner_id", owner_res.data[0]["owner_id"]).eq("business_id", business_id).execute()
+        if len(biz_res.data) == 0:
+            raise HTTPException(status_code=403, detail="Access Denied: You do not own this business.")
+
+        # 🛡️ SECURITY CHECK 2: True MIME-Type Validation
+        if file.content_type != "application/pdf":
+            raise HTTPException(status_code=400, detail="Invalid file. Only authentic PDF documents are allowed.")
+
+        # 🛡️ SECURITY CHECK 3: Memory Exhaustion Prevention (Max 5MB)
+        MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 Megabytes
         
-        # 2. Ask Gemini to extract the structured ML features from the PDF
+        # Read up to 5MB + 1 extra byte
+        pdf_bytes = await file.read(MAX_FILE_SIZE + 1)
+        
+        if len(pdf_bytes) > MAX_FILE_SIZE:
+            raise HTTPException(status_code=413, detail="Payload Too Large: File exceeds the 5MB limit.")
+            
+        # 1. Ask Gemini to extract the structured ML features from the safe PDF bytes
         ml_input = extract_ml_features_from_pdf(pdf_bytes)
         
         if "error" in ml_input:
             raise HTTPException(status_code=500, detail="Failed to read data from PDF.")
             
-        # 3. Feed the extracted data straight into CatBoost/XGBoost!
+        # 2. Feed the extracted data straight into CatBoost/XGBoost
         print(f"🧠 Running ML Analysis using PDF data for Business ID: {business_id}")
         ai_results = run_predictions(ml_input)
         
-        # 4. Ask Gemini to write the final Advisory Report based on the ML results
+        # 3. Ask Gemini to write the final Advisory Report based on the ML results
         ai_payload = generate_business_report(ml_input, ai_results)
         
         return {
@@ -198,6 +267,8 @@ async def analyze_pdf_business_plan(business_id: str, file: UploadFile = File(..
             "advisory_report": ai_payload
         }
 
+    except HTTPException as he:
+        raise he
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"PDF Processing Error: {str(e)}")
 
@@ -268,4 +339,4 @@ def download_pdf_report(business_id: str):
         )
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"PDF Generation Error: {str(e)}")        
+        raise HTTPException(status_code=500, detail=f"PDF Generation Error: {str(e)}")

@@ -59,3 +59,22 @@ class ContactRequest(BaseModel):
     email: str
     subject: str
     message: str
+
+
+class GoogleToken(BaseModel):
+    access_token: str
+
+
+# email link schema
+class MagicLinkRequest(BaseModel):
+    email: str
+
+class MagicLinkVerify(BaseModel):
+    email: str
+    token: str    
+
+# news letter
+class BroadcastRequest(BaseModel):
+    admin_password: str # Simple security check
+    subject: str
+    html_content: str    
