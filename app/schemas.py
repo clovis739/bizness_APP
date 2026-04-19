@@ -23,6 +23,11 @@ class ResetPassword(BaseModel):
     otp: str
     new_password: str
 
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
 # ==========================================
 # BUSINESS SCHEMAS
 # ==========================================
@@ -40,6 +45,19 @@ class BusinessRegistration(BaseModel):
     years_of_experience: int
     transport_cost_percentage: float
     energy_cost_percentage: float
+
+class BusinessProfileUpdate(BaseModel):
+    owner_full_name: str | None = None
+    phone: str | None = None
+    business_name: str | None = None
+    industry: str | None = None
+    region: str | None = None
+    sector: str | None = None
+    startup_capital_cfa: float | None = None
+    employees: int | None = None
+    years_of_experience: int | None = None
+    transport_cost_percentage: float | None = None
+    energy_cost_percentage: float | None = None
 
     # ==========================================
 # AI PREDICTION SCHEMAS
@@ -62,6 +80,14 @@ class ContactRequest(BaseModel):
 
 
 class GoogleToken(BaseModel):
+    access_token: str
+
+
+class MobileRefreshRequest(BaseModel):
+    refresh_token: str
+
+
+class SupabaseEmailLinkExchange(BaseModel):
     access_token: str
 
 

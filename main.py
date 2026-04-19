@@ -2,6 +2,7 @@ import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from apscheduler.schedulers.background import BackgroundScheduler
 import sentry_sdk
 from dotenv import load_dotenv
@@ -93,6 +94,11 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Serve locally uploaded profile assets so the mobile app can render avatar/logo URLs.
+uploads_dir = os.path.join(os.path.dirname(__file__), "uploads")
+os.makedirs(uploads_dir, exist_ok=True)
+app.mount("/uploads", StaticFiles(directory=uploads_dir), name="uploads")
+
 # ==========================================
 # REGISTER THE RATE LIMITER
 # ==========================================
@@ -162,4 +168,5 @@ def health_check():
 
 @app.get("/")
 def read_root():
-    return {"message": "✅ BizSense OS FastAPI Server is running online!"}
+    return {"message": "✅ BizSense OS FastAPIs Server is running online!"}
+    

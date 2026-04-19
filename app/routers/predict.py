@@ -11,6 +11,7 @@ from app.schemas import PredictionRequest
 from app.services.ml_service import run_predictions
 from app.services.llm_service import generate_business_report 
 from app.services.llm_service import extract_ml_features_from_pdf
+from app.services.push_notifications import extract_push_token_values, send_expo_push_notifications
 from app.limiter import limiter 
 from app.redis_client import redis_db 
 from app.routers.communication import send_html_email
@@ -148,6 +149,17 @@ def generate_prediction(
             """
             # Send quietly in the background
             background_tasks.add_task(send_html_email, user_email, "Your AI Business Prediction is Ready!", email_html)
+
+        if notifs.get("push_mobile", True) == True:
+            push_tokens = extract_push_token_values(prefs_data)
+            if push_tokens:
+                background_tasks.add_task(
+                    send_expo_push_notifications,
+                    push_tokens=push_tokens,
+                    title="Prediction completed",
+                    body=f"Your BizNess AI report for {payload.business_id} is ready.",
+                    data={"business_id": payload.business_id, "type": "prediction_complete"},
+                )
 
         return final_response
 

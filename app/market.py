@@ -7,6 +7,7 @@ import json
 from fastapi import APIRouter, HTTPException
 from app.redis_client import redis_db
 from dotenv import load_dotenv
+from redis.exceptions import RedisError
 
 load_dotenv()
 # You will need to get this from Google Cloud Platform
@@ -27,9 +28,12 @@ def get_rising_businesses(city: str = "Douala", industry: str = "startup"):
 
     # 1. Check Redis Cache First (Super Fast & Free)
     if redis_db:
-        cached_data = redis_db.get(cache_key)
-        if cached_data:
-            return {"status": "Success", "source": "cache", "data": json.loads(cached_data)}
+        try:
+            cached_data = redis_db.get(cache_key)
+            if cached_data:
+                return {"status": "Success", "source": "cache", "data": json.loads(cached_data)}
+        except RedisError as redis_error:
+            print(f"Market cache read failed for {cache_key}: {redis_error}")
 
     # 2. If not in cache, call Google Places API
     if not GOOGLE_PLACES_API_KEY:
@@ -40,7 +44,7 @@ def get_rising_businesses(city: str = "Douala", industry: str = "startup"):
     url = f"https://maps.googleapis.com/maps/api/place/textsearch/json?query={query}&key={GOOGLE_PLACES_API_KEY}"
 
     try:
-        response = requests.get(url)
+        response = requests.get(url, timeout=15)
         data = response.json()
 
         if data.get("status") != "OK":
@@ -74,9 +78,16 @@ def get_rising_businesses(city: str = "Douala", industry: str = "startup"):
 
         # 4. Save to Redis Cache for 24 hours (86400 seconds)
         if redis_db:
-            redis_db.setex(cache_key, 86400, json.dumps(top_10))
+            try:
+                redis_db.setex(cache_key, 86400, json.dumps(top_10))
+            except RedisError as redis_error:
+                print(f"Market cache write failed for {cache_key}: {redis_error}")
 
         return {"status": "Success", "source": "google_api", "data": top_10}
 
+    except HTTPException as exc:
+        raise exc
+    except requests.RequestException as request_error:
+        raise HTTPException(status_code=502, detail=f"Failed to fetch market data: {request_error}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
