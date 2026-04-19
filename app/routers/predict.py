@@ -91,10 +91,15 @@ def generate_prediction(
         }
         supabase.table("survival_prediction").insert(surv_insert).execute()
 
+        # Calculate growth rate: profit as a % of startup capital (simple ROI).
+        # max(1, ...) prevents dividing by zero if capital is 0.
+        startup_capital = max(1, ml_input["startup_capital_cfa"])
+        growth_rate = round((ai_results["projected_profit_cfa"] / startup_capital) * 100, 2)
+
         growth_insert = {
             "business_id": payload.business_id,
             "predicted_profit_cfa": ai_results["projected_profit_cfa"],
-            "growth_rate": 0.0,
+            "growth_rate": growth_rate,
             "chart_data": ai_payload.get("chart_data", {}),
             "full_report": ai_payload 
         }
@@ -291,12 +296,26 @@ async def analyze_pdf_business_plan(
 # PDF EXPORT ENDPOINT
 # ==========================================
 @router.get("/download-report/{business_id}")
-def download_pdf_report(business_id: str):
+def download_pdf_report(business_id: str, current_user: dict = Depends(get_current_user)):
     """
-    Fetches the latest AI report from the database and converts it into 
+    Fetches the latest AI report from the database and converts it into
     a highly professional, downloadable PDF document for banks and investors.
+    SECURED: Requires login and verifies the user owns this business.
     """
     try:
+        sme_id = current_user["sme_id"]
+
+        # Security check 1: does this user have an owner profile?
+        owner_res = supabase.table("owner").select("owner_id").eq("sme_id", sme_id).execute()
+        if len(owner_res.data) == 0:
+            raise HTTPException(status_code=403, detail="Access Denied: No owner profile found.")
+        owner_id = owner_res.data[0]["owner_id"]
+
+        # Security check 2: does this business belong to this owner?
+        biz_res = supabase.table("business").select("business_id").eq("owner_id", owner_id).eq("business_id", business_id).execute()
+        if len(biz_res.data) == 0:
+            raise HTTPException(status_code=403, detail="Access Denied: You do not own this business.")
+
         # 1. Fetch the latest report from the database
         res = supabase.table("growth_forecast") \
             .select("full_report") \

@@ -36,6 +36,10 @@ from app.security import (
 
 load_dotenv()
 
+# Set COOKIE_SECURE=true in your production .env file.
+# Keeps cookies HTTP-only for local dev, HTTPS-only in production.
+COOKIE_SECURE = os.getenv("COOKIE_SECURE", "false").lower() == "true"
+
 MOBILE_MAGIC_LINK_BASE_URL = os.getenv(
     "MOBILE_MAGIC_LINK_BASE_URL",
     "biznessmobileapp://magic-link",
@@ -235,7 +239,8 @@ def validate_magic_link_token(email: str, token: str) -> dict:
     if not user:
         raise HTTPException(status_code=400, detail="Invalid request.")
 
-    if user.get("reset_otp") != token:
+    # Compare against the stored "magic:" prefixed value
+    if user.get("reset_otp") != "magic:" + token:
         raise HTTPException(status_code=400, detail="Invalid or expired magic link.")
 
     expiry_str = user.get("otp_expiry")
@@ -427,7 +432,7 @@ def login_sme(credentials: SMELogin, response: Response):
             key="bizness_session",
             value=user["sme_id"],
             httponly=True,
-            secure=False,
+            secure=COOKIE_SECURE,
             samesite="lax",
             max_age=86400,
         )
@@ -487,8 +492,9 @@ def forgot_password(request: ForgotPassword):
 
         otp_code = str(random.randint(100000, 999999))
         expiry_time = datetime.now(timezone.utc) + timedelta(minutes=15)
+        # "otp:" prefix stops this token from being accepted as a magic link
         supabase.table("sme").update(
-            {"reset_otp": otp_code, "otp_expiry": expiry_time.isoformat()}
+            {"reset_otp": "otp:" + otp_code, "otp_expiry": expiry_time.isoformat()}
         ).eq("email", request.email).execute()
 
         send_otp_email(request.email, otp_code)
@@ -506,7 +512,8 @@ def reset_password(request: ResetPassword):
         if not user:
             raise HTTPException(status_code=400, detail="Invalid request.")
 
-        if user.get("reset_otp") != request.otp:
+        # Compare against the stored "otp:" prefixed value
+        if user.get("reset_otp") != "otp:" + request.otp:
             raise HTTPException(status_code=400, detail="Invalid OTP code.")
 
         expiry_str = user.get("otp_expiry")
@@ -582,7 +589,7 @@ def google_auth(token_data: GoogleToken, response: Response):
             key="bizness_session",
             value=user["sme_id"],
             httponly=True,
-            secure=False,
+            secure=COOKIE_SECURE,
             samesite="lax",
             max_age=86400,
         )
@@ -682,8 +689,9 @@ def request_magic_link(request: MagicLinkRequest):
 
         secure_token = uuid.uuid4().hex
         expiry_time = datetime.now(timezone.utc) + timedelta(minutes=15)
+        # "magic:" prefix stops this token from being accepted as a password-reset OTP
         supabase.table("sme").update(
-            {"reset_otp": secure_token, "otp_expiry": expiry_time.isoformat()}
+            {"reset_otp": "magic:" + secure_token, "otp_expiry": expiry_time.isoformat()}
         ).eq("email", request.email).execute()
 
         send_magic_link_email(request.email, secure_token)
@@ -700,7 +708,7 @@ def verify_magic_link(request: MagicLinkVerify, response: Response):
             key="bizness_session",
             value=user["sme_id"],
             httponly=True,
-            secure=False,
+            secure=COOKIE_SECURE,
             samesite="lax",
             max_age=86400,
         )
@@ -752,7 +760,7 @@ def logout_sme(response: Response):
     response.delete_cookie(
         key="bizness_session",
         httponly=True,
-        secure=False,
+        secure=COOKIE_SECURE,
         samesite="lax",
     )
     return {"status": "Success", "message": "Logged out successfully"}

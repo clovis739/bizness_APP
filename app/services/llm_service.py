@@ -103,6 +103,50 @@ def generate_business_report(business_data: dict, ai_results: dict) -> dict:
                 "competitors": [
                     {{"type": "Informal Sellers", "threat_level": 85}}
                 ]
+            }},
+            "swot_analysis": {{
+                "strengths": [
+                    "An internal advantage specific to this business based on their capital, experience, or low overhead costs.",
+                    "A second internal strength relevant to the {business_data['industry']} industry in {business_data['region']}."
+                ],
+                "weaknesses": [
+                    "An internal weakness based on their transport or energy overhead being too high.",
+                    "A second internal weakness such as limited capital, small team size, or sector risk."
+                ],
+                "opportunities": [
+                    "A real market opportunity in the {business_data['region']} region of Cameroon for the {business_data['industry']} sector.",
+                    "A second opportunity such as mobile money adoption, government SME programs, or regional demand growth."
+                ],
+                "threats": [
+                    "A real external threat in Cameroon such as informal market competition, inflation, or power outages.",
+                    "A second threat such as regulatory risk, foreign competition, or currency instability in the CFA zone."
+                ]
+            }},
+            "regional_competitors": {{
+                "local": [
+                    {{
+                        "name": "A real or representative local competitor name operating in {business_data['region']}",
+                        "type": "Direct",
+                        "threat_level": 80,
+                        "why_they_matter": "One sentence on why this local competitor is a threat to this specific business."
+                    }}
+                ],
+                "national": [
+                    {{
+                        "name": "A well-known Cameroonian company in the {business_data['industry']} sector",
+                        "type": "Direct",
+                        "threat_level": 60,
+                        "why_they_matter": "One sentence on why this national player poses a competitive risk."
+                    }}
+                ],
+                "international": [
+                    {{
+                        "name": "A global or pan-African brand that competes in the {business_data['industry']} space",
+                        "type": "Indirect",
+                        "threat_level": 40,
+                        "why_they_matter": "One sentence on why this international brand matters even to a local Cameroonian SME."
+                    }}
+                ]
             }}
         }}
         """
@@ -151,8 +195,18 @@ def extract_ml_features_from_pdf(pdf_bytes: bytes) -> dict:
             full_text += page.get_text("text")
         doc.close()
 
-        # 2. Ask Gemini to extract the data into JSON
-        model = genai.GenerativeModel('gemini-pro')
+        # 2. Ask Gemini to extract the data into JSON.
+        # Use the same auto-discover logic as generate_business_report
+        # so we never rely on a deprecated hardcoded model name.
+        pdf_model_name = None
+        for m in genai.list_models():
+            if 'generateContent' in m.supported_generation_methods:
+                if 'flash' in m.name.lower() or 'pro' in m.name.lower():
+                    pdf_model_name = m.name
+                    break
+        if not pdf_model_name:
+            pdf_model_name = "models/gemini-1.5-flash"
+        model = genai.GenerativeModel(pdf_model_name)
         prompt = f"""
         You are an expert data extractor. Read the following business document and extract 
         the exact numbers needed for our Machine Learning model. 

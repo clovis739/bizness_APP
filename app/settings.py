@@ -282,6 +282,91 @@ def _build_metric_visuals(survival_predictions, growth_forecasts):
     return drawing
 
 
+# Render the SWOT quadrants as a branded 2×2 grid that matches the card style
+# used throughout the rest of the PDF export.
+def _build_swot_grid(swot: dict) -> Table:
+
+    def _swot_cell(label, items, header_color, tint_color):
+        """Build one SWOT quadrant: a colored header stacked above a tinted content area."""
+        bullet_items = _normalise_bullet_items(items)
+
+        # Colored header row with white label
+        header_cell = Table(
+            [[Paragraph(label, ParagraphStyle(
+                f"SwotHead_{label}",
+                fontName="Helvetica-Bold",
+                fontSize=10,
+                leading=13,
+                textColor=colors.white,
+            ))]],
+            colWidths=[238],
+        )
+        header_cell.setStyle(TableStyle([
+            ("BACKGROUND",    (0, 0), (-1, -1), header_color),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 12),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 12),
+            ("TOPPADDING",    (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ]))
+
+        # Light tinted content area with bullet items
+        content_rows = [
+            [Paragraph(
+                f"• {escape(str(item))}",
+                ParagraphStyle(
+                    "SwotItem",
+                    fontName="Helvetica",
+                    fontSize=9,
+                    leading=14,
+                    textColor=colors.HexColor("#1F2937"),
+                    spaceAfter=3,
+                ),
+            )]
+            for item in bullet_items
+        ] or [[Paragraph("—", ParagraphStyle("SwotEmpty", fontSize=9, textColor=BIZNESS_MUTED))]]
+
+        content_cell = Table(content_rows, colWidths=[238])
+        content_cell.setStyle(TableStyle([
+            ("BACKGROUND",    (0, 0), (-1, -1), tint_color),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 12),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 12),
+            ("TOPPADDING",    (0, 0), (-1, -1), 8),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ]))
+
+        # Stack header + content and add a branded border around the whole quadrant
+        quadrant = Table([[header_cell], [content_cell]], colWidths=[238])
+        quadrant.setStyle(TableStyle([
+            ("BOX",           (0, 0), (-1, -1), 0.75, BIZNESS_BORDER),
+            ("LEFTPADDING",   (0, 0), (-1, -1), 0),
+            ("RIGHTPADDING",  (0, 0), (-1, -1), 0),
+            ("TOPPADDING",    (0, 0), (-1, -1), 0),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 0),
+            ("VALIGN",        (0, 0), (-1, -1), "TOP"),
+        ]))
+        return quadrant
+
+    strengths_cell     = _swot_cell("✦  Strengths",     swot.get("strengths",     []), BIZNESS_ACCENT,              colors.HexColor("#ECFDF3"))
+    weaknesses_cell    = _swot_cell("⚠  Weaknesses",    swot.get("weaknesses",    []), BIZNESS_WARNING,             colors.HexColor("#FFF7ED"))
+    opportunities_cell = _swot_cell("◈  Opportunities", swot.get("opportunities", []), BIZNESS_SECONDARY,           colors.HexColor("#EEF4FF"))
+    threats_cell       = _swot_cell("⬡  Threats",       swot.get("threats",       []), colors.HexColor("#DC2626"),  colors.HexColor("#FEF2F2"))
+
+    # Arrange the four quadrants into a 2×2 grid with a small gutter between cells
+    grid = Table(
+        [[strengths_cell, weaknesses_cell], [opportunities_cell, threats_cell]],
+        colWidths=[250, 250],
+        hAlign="LEFT",
+    )
+    grid.setStyle(TableStyle([
+        ("LEFTPADDING",   (0, 0), (-1, -1), 0),
+        ("RIGHTPADDING",  (0, 0), (-1, -1), 8),
+        ("TOPPADDING",    (0, 0), (-1, -1), 0),
+        ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
+        ("VALIGN",        (0, 0), (-1, -1), "TOP"),
+    ]))
+    return grid
+
+
 # Build the first-page hero block and supporting metadata cards.
 def _build_cover_block(user, export_type, generated_at):
     hero = Table(
@@ -629,8 +714,78 @@ def _build_pdf_export(export_data: dict, export_type: str) -> bytes:
                 [
                     _section_heading("Tax Breakdown", section_style),
                     Paragraph(_rich_text(tax_breakdown), body_style),
+                    Spacer(1, 12),
                 ]
             )
+
+        # ── SWOT Analysis — rendered as a branded 2×2 grid ──
+        swot = latest_growth_report.get("swot_analysis")
+        if swot and isinstance(swot, dict):
+            story.append(_section_heading("SWOT Analysis", section_style))
+            story.append(_build_swot_grid(swot))
+            story.append(Spacer(1, 14))
+
+        # ── Regional Competitor Intelligence ──
+        competitors_data = latest_growth_report.get("regional_competitors")
+        if competitors_data and isinstance(competitors_data, dict):
+            story.append(_section_heading("Regional Competitor Intelligence", section_style))
+
+            # Three tiers: local → national → international
+            competitor_tiers = [
+                ("Local Competitors",         competitors_data.get("local", []),         BIZNESS_SECONDARY),
+                ("National Competitors",      competitors_data.get("national", []),      colors.HexColor("#7C3AED")),
+                ("International Competitors", competitors_data.get("international", []), BIZNESS_WARNING),
+            ]
+
+            for tier_label, tier_entries, tier_color in competitor_tiers:
+                if not tier_entries:
+                    continue
+
+                # Colored sub-heading for each tier
+                story.append(
+                    Paragraph(
+                        tier_label,
+                        ParagraphStyle(
+                            f"Tier_{tier_label}",
+                            parent=getSampleStyleSheet()["Heading3"],
+                            textColor=tier_color,
+                            fontName="Helvetica-Bold",
+                            fontSize=11,
+                            spaceBefore=6,
+                            spaceAfter=4,
+                        ),
+                    )
+                )
+
+                # One table per tier — Name / Type / Threat Level / Why They Matter
+                tier_rows = [["Name", "Type", "Threat", "Why They Matter"]]
+                for entry in tier_entries:
+                    tier_rows.append([
+                        _stringify_value(entry.get("name")),
+                        _stringify_value(entry.get("type")),
+                        _stringify_value(entry.get("threat_level")),
+                        _safe_paragraph(entry.get("why_they_matter")),
+                    ])
+
+                # Use colWidths that give most space to the "Why" column
+                comp_table = Table(tier_rows, colWidths=[130, 60, 50, 240], repeatRows=1, hAlign="LEFT")
+                comp_table.setStyle(
+                    TableStyle([
+                        ("BACKGROUND",   (0, 0), (-1, 0),  BIZNESS_PRIMARY),
+                        ("TEXTCOLOR",    (0, 0), (-1, 0),  colors.white),
+                        ("FONTNAME",     (0, 0), (-1, 0),  "Helvetica-Bold"),
+                        ("BACKGROUND",   (0, 1), (-1, -1), colors.HexColor("#F8FAFC")),
+                        ("ROWBACKGROUNDS", (0, 1), (-1, -1), [colors.white, colors.HexColor("#F8FAFC")]),
+                        ("GRID",         (0, 0), (-1, -1), 0.5, colors.HexColor("#D1D9E6")),
+                        ("VALIGN",       (0, 0), (-1, -1), "TOP"),
+                        ("LEFTPADDING",  (0, 0), (-1, -1), 8),
+                        ("RIGHTPADDING", (0, 0), (-1, -1), 8),
+                        ("TOPPADDING",   (0, 0), (-1, -1), 7),
+                        ("BOTTOMPADDING",(0, 0), (-1, -1), 7),
+                    ])
+                )
+                story.append(comp_table)
+                story.append(Spacer(1, 10))
 
     doc.build(story, onFirstPage=_draw_page_footer, onLaterPages=_draw_page_footer)
     pdf_bytes = buffer.getvalue()
