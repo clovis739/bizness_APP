@@ -20,7 +20,7 @@ What happens if a malicious user or a bot writes a script to hit your `/generate
 * **The Fix:** We add a library called `slowapi` to your FastAPI app.
 * **How it works:** You put a strict limit on endpoints. For example: *Free users can only generate 3 predictions per day. Premium users get 50 per day.* If they exceed it, the server automatically blocks them and returns a `429 Too Many Requests` error.
 
-### 3. Redis Caching Layer (Speed & Cost Optimization)
+### 3. Redis  aching Layer (Speed & Cost Optimization)
 
 Machine Learning and LLMs are slow and expensive. If a user clicks "Generate Prediction", waits 10 seconds for Gemini, refreshes the page, and clicks it again—you just paid Google twice for the exact same report!
 
@@ -219,7 +219,7 @@ Once the **Daily Ledger** is running, we will write a background function in `ml
 
 This roadmap is beautiful, but it is a trap right now. If we start building `ledger.py` and Twilio integrations today, we will spend another 3 weeks in Python and you will have absolutely nothing visual to show for your hard work.
 
-**The Golden Rule of SaaS Development:** Build the core value visually, *then* add the operational features.
+**The Golden Rule of SaaS Development:** Build the core value visually, *then* add the operational features. for the dev
 
 We have the ML models and Gemini working perfectly. We should jump into the `frontend` folder, build the React dashboard, make the pie charts light up with your AI data, and then come back to build these backend OS features one by one as we need them on the UI.
 
