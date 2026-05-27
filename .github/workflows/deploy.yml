@@ -7,7 +7,6 @@ on:
   push:
     branches:
       - main
-
 jobs:
   # ==========================================
   # JOB 1: CONTINUOUS INTEGRATION (TESTING)
