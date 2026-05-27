@@ -681,3 +681,9 @@ def logout_sme(response: Response):
         samesite="lax"
     )
     return {"status": "Success", "message": "Logged out successfully"}
+
+
+
+
+    
+python -m uvicorn main:app --reload

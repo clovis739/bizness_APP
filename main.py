@@ -15,8 +15,13 @@ from app.routers import auth, business, predict, communication, dashboard
 from app import settings, market
 from app.services.ml_service import load_models, survival_model, profit_model
 
+# ── V2 routers ──────────────────────────────────────────────
+from app_v2.routers.business_v2 import router as business_v2_router
+from app_v2.routers.predict_v2  import router as predict_v2_router
+from app_v2.services.ml_service_v2 import load_models as load_v2_models
+
 # Adjust this import based on exactly where your communication file lives!
-from app.routers.communication import send_html_email as send_email 
+from app.routers.communication import send_html_email as send_email
 
 # --- NEW IMPORTS FOR RATE LIMITING ---
 from app.limiter import limiter
@@ -69,8 +74,9 @@ def send_daily_newsletter():
 async def lifespan(app: FastAPI):
     # --- 1. STARTUP PHASE ---
     print("🚀 Server is starting up...")
-    load_models()
-    
+    load_models()       # V1 models
+    load_v2_models()    # V3 models (CatBoost + LightGBM + Cox PH)
+
     scheduler = BackgroundScheduler()
     scheduler.add_job(send_daily_newsletter, 'cron', hour=8, minute=0)
     scheduler.start()
@@ -136,6 +142,10 @@ app.include_router(communication.router)
 app.include_router(dashboard.router)
 app.include_router(settings.router)
 app.include_router(market.router)
+
+# ── V2 routers ──────────────────────────────────────────────
+app.include_router(business_v2_router)   # /api/v2/business
+app.include_router(predict_v2_router)    # /api/v2/predict
 
 
 # ==========================================

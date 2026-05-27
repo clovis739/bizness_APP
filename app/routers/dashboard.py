@@ -60,6 +60,7 @@ def _save_asset(file: UploadFile, folder: Path, entity_id: str) -> str:
 
 # Follow the SME -> Owner -> Business relationship once so the endpoints stay consistent.
 def _get_owner_and_business(sme_id: str):
+    """Returns (owner, first_business). Used by update-profile and upload-logo."""
     owner_res = supabase.table("owner").select("*").eq("sme_id", sme_id).execute()
     owner = owner_res.data[0] if owner_res.data else None
     if not owner:
@@ -68,6 +69,12 @@ def _get_owner_and_business(sme_id: str):
     business_res = supabase.table("business").select("*").eq("owner_id", owner["owner_id"]).execute()
     business = business_res.data[0] if business_res.data else None
     return owner, business
+
+
+def _get_all_businesses(owner_id: str) -> list:
+    """Returns every business record owned by this owner; supports multi-business profiles."""
+    res = supabase.table("business").select("*").eq("owner_id", owner_id).execute()
+    return res.data or []
 
 
 @router.get("/me")
@@ -105,25 +112,35 @@ def get_dashboard_data(request: Request, current_user: dict = Depends(get_curren
         survival_history = []
         growth_history = []
 
-        if business_data:
+        # Fetch every business this owner manages (supports multi-business profiles)
+        all_businesses = _get_all_businesses(owner["owner_id"])
+
+        for biz in all_businesses:
+            biz_id = biz["business_id"]
             profile_res = (
                 supabase
                 .table("business_profile")
                 .select("*")
-                .eq("business_id", business_data["business_id"])
+                .eq("business_id", biz_id)
                 .execute()
             )
             profile_data = profile_res.data[0] if profile_res.data else None
-            business_payload = {**business_data, **profile_data} if profile_data else business_data
-            business_payload["phone"] = owner.get("phone")
-            business_payload["logo_url"] = _resolve_asset_url(request, LOGOS_DIR, business_data["business_id"])
-            businesses_payload = [business_payload]
+            biz_full = {**biz, **profile_data} if profile_data else dict(biz)
+            biz_full["phone"] = owner.get("phone")
+            biz_full["logo_url"] = _resolve_asset_url(request, LOGOS_DIR, biz_id)
+            businesses_payload.append(biz_full)
 
+        # The primary business is the first one (oldest registration)
+        business_payload = businesses_payload[0] if businesses_payload else None
+
+        # History from the primary business â€” frontend can query per-business via businessId
+        if business_payload:
+            primary_id = business_payload["business_id"]
             survival_history = (
                 supabase
                 .table("survival_prediction")
                 .select("*")
-                .eq("business_id", business_data["business_id"])
+                .eq("business_id", primary_id)
                 .order("created_at", desc=True)
                 .limit(5)
                 .execute()
@@ -134,7 +151,7 @@ def get_dashboard_data(request: Request, current_user: dict = Depends(get_curren
                 supabase
                 .table("growth_forecast")
                 .select("forecast_id, predicted_profit_cfa, growth_rate, full_report, chart_data, created_at")
-                .eq("business_id", business_data["business_id"])
+                .eq("business_id", primary_id)
                 .order("created_at", desc=True)
                 .limit(5)
                 .execute()
@@ -214,22 +231,44 @@ async def upload_avatar(request: Request, file: UploadFile = File(...), current_
 
 
 @router.post("/upload-business-logo")
-async def upload_business_logo(request: Request, file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
+async def upload_business_logo(
+    request: Request,
+    business_id: Optional[str] = None,
+    file: UploadFile = File(...),
+    current_user: dict = Depends(get_current_user),
+):
     """
-    Upload or replace the current business logo for the signed-in SME.
+    Upload or replace a business logo. If business_id is provided, verify that
+    the selected business belongs to the signed-in SME before writing the file.
     """
     try:
-        _, business_data = _get_owner_and_business(current_user["sme_id"])
-        if not business_data:
+        owner, business_data = _get_owner_and_business(current_user["sme_id"])
+        if not owner:
+            raise HTTPException(status_code=404, detail="Owner profile not found.")
+
+        selected_business = business_data
+        if business_id:
+            selected_res = (
+                supabase.table("business")
+                .select("business_id")
+                .eq("owner_id", owner["owner_id"])
+                .eq("business_id", business_id)
+                .execute()
+            )
+            selected_business = selected_res.data[0] if selected_res.data else None
+
+        if not selected_business:
             raise HTTPException(status_code=404, detail="Business profile not found.")
 
-        _save_asset(file, LOGOS_DIR, business_data["business_id"])
+        selected_id = selected_business["business_id"]
+        _save_asset(file, LOGOS_DIR, selected_id)
         return {
             "status": "Success",
             "message": "Business logo uploaded successfully!",
-            "url": _resolve_asset_url(request, LOGOS_DIR, business_data["business_id"]),
+            "url": _resolve_asset_url(request, LOGOS_DIR, selected_id),
         }
     except HTTPException:
         raise
     except Exception as error:
         raise HTTPException(status_code=500, detail="Failed to upload business logo.") from error
+

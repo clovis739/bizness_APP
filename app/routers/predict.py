@@ -11,6 +11,7 @@ from app.schemas import PredictionRequest
 from app.services.ml_service import run_predictions
 from app.services.llm_service import generate_business_report 
 from app.services.llm_service import extract_ml_features_from_pdf
+from app.services.forecast_math import calculate_growth_rate
 from app.services.push_notifications import extract_push_token_values, send_expo_push_notifications
 from app.limiter import limiter 
 from app.redis_client import redis_db 
@@ -92,9 +93,11 @@ def generate_prediction(
         supabase.table("survival_prediction").insert(surv_insert).execute()
 
         # Calculate growth rate: profit as a % of startup capital (simple ROI).
-        # max(1, ...) prevents dividing by zero if capital is 0.
-        startup_capital = max(1, ml_input["startup_capital_cfa"])
-        growth_rate = round((ai_results["projected_profit_cfa"] / startup_capital) * 100, 2)
+        # Clamp to the database column range: growth_forecast.growth_rate is numeric(5,2).
+        growth_rate = calculate_growth_rate(
+            ai_results["projected_profit_cfa"],
+            ml_input["startup_capital_cfa"],
+        )
 
         growth_insert = {
             "business_id": payload.business_id,
