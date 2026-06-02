@@ -2,7 +2,7 @@
 
 
 ```markdown
-# 🌍 BizNess OS: AI-Powered SME Consultant API 🇨🇲
+# 🌍 BizSense OS: AI-Powered SME Consultant API 🇨🇲
 
 [![Python 3.11](https://img.shields.io/badge/Python-3.11-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.109+-009688.svg)](https://fastapi.tiangolo.com)
@@ -10,8 +10,8 @@
 [![Google Gemini](https://img.shields.io/badge/Gemini_Pro-Generative_AI-orange.svg)]()
 [![Supabase](https://img.shields.io/badge/Supabase-PostgreSQL-3ECF8E.svg)]()
 
-## 📖 What is BizNess OS?
-BizNess OS is a comprehensive, autonomous backend engine designed to solve the high failure rate of Small and Medium Enterprises (SMEs) in Cameroon. 
+## 📖 What is BizSense OS?
+BizSense OS is a comprehensive, autonomous backend engine designed to solve the high failure rate of Small and Medium Enterprises (SMEs) in Cameroon. 
 
 It takes raw business data (capital, region, overheads), processes it through **Machine Learning (CatBoost)** to predict survival probability and profit, and then feeds those mathematical results into **Google Gemini**. Gemini acts as an elite business consultant, generating localized, **MIT-Standard Business Plans** tailored specifically to the Cameroonian economic landscape (including exact local tax regimes like *l'Impôt Libératoire*).
 
@@ -182,7 +182,7 @@ Fetches the latest AI report for a business from the Supabase database and dynam
 
 ```bash
 # This will download the file directly to your machine
-curl -o BizNess_Report.pdf "[https://bizness-app.onrender.com/api/v1/predict/download-report/test-001](https://bizness-app.onrender.com/api/v1/predict/download-report/test-001)"
+curl -o BizSense_Report.pdf "[https://bizness-app.onrender.com/api/v1/predict/download-report/test-001](https://bizness-app.onrender.com/api/v1/predict/download-report/test-001)"
 
 ```
 

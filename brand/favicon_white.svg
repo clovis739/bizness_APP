@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
-  <!-- BizNess OS — White edition (white on dark, for dark backgrounds) -->
+  <!-- BizSense OS — White edition (white on dark, for dark backgrounds) -->
   <rect width="64" height="64" rx="14" fill="#071D54"/>
   <g transform="translate(32,32)">
     <path d="M -12,-19 L -12,19 L -4.5,19 C 16,19 16,0 -4.5,0 C 14,0 14,-19 -4.5,-19 Z" fill="#ffffff"/>

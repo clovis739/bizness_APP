@@ -165,7 +165,7 @@ def generate_prediction(
                     send_expo_push_notifications,
                     push_tokens=push_tokens,
                     title="Prediction completed",
-                    body=f"Your BizNess AI report for {payload.business_id} is ready.",
+                    body=f"Your BizSense AI report for {payload.business_id} is ready.",
                     data={"business_id": payload.business_id, "type": "prediction_complete"},
                 )
 
@@ -339,7 +339,7 @@ def download_pdf_report(business_id: str, current_user: dict = Depends(get_curre
 
         # 3. Build the PDF Content
         # Title
-        Story.append(Paragraph("BizNess AI Advisory Report", styles['Title']))
+        Story.append(Paragraph("BizSense AI Advisory Report", styles['Title']))
         Story.append(Spacer(1, 20))
 
         # Main Text Sections
@@ -369,7 +369,7 @@ def download_pdf_report(business_id: str, current_user: dict = Depends(get_curre
         return StreamingResponse(
             buffer, 
             media_type="application/pdf", 
-            headers={"Content-Disposition": f"attachment; filename=BizNess_Report_{business_id}.pdf"}
+            headers={"Content-Disposition": f"attachment; filename=BizSense_Report_{business_id}.pdf"}
         )
 
     except Exception as e:

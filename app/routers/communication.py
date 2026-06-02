@@ -137,7 +137,7 @@ def send_newsletter_subscription_emails(subscriber_email: str, welcome_html: str
         if ADMIN_EMAIL:
             send_html_email(
                 ADMIN_EMAIL,
-                "New BizNess newsletter subscriber",
+                "New BizSense newsletter subscriber",
                 admin_html,
                 server=smtp_server,
             )
@@ -293,7 +293,7 @@ def subscribe_newsletter(request: SubscribeRequest, background_tasks: Background
             <div style="max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 12px; border-top: 5px solid #476DDC;">
               <h2 style="margin-top: 0; color: #111827;">New Newsletter Subscriber</h2>
               <p style="color: #4b5563; line-height: 1.6;">
-                A new user has subscribed to the BizNess newsletter.
+                A new user has subscribed to the BizSense newsletter.
               </p>
               <div style="background-color: #EFF6FF; border: 1px solid #BFDBFE; border-radius: 12px; padding: 16px; margin-top: 20px;">
                 <p style="margin: 0; color: #1E3A8A;"><strong>Email:</strong> {request.email}</p>

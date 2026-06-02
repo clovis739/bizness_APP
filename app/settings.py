@@ -9,7 +9,7 @@ from io import BytesIO
 from app.database import supabase
 from app.routers.dashboard import get_current_user # Reusing our secure bouncer!
 from app.services.push_notifications import merge_push_token, remove_push_token
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from reportlab.lib.pagesizes import A4
 from reportlab.lib import colors
 from reportlab.lib.enums import TA_CENTER
@@ -29,8 +29,12 @@ BIZNESS_SOFT = colors.HexColor("#EAF1FF")
 router = APIRouter(prefix="/api/v1/settings", tags=["Settings"])
 
 class PreferencesUpdate(BaseModel):
-    notifs: dict
-    privacy: dict
+    notifs: dict = Field(default_factory=dict)
+    privacy: dict = Field(default_factory=dict)
+    appearance: dict = Field(default_factory=dict)
+    integrations: dict = Field(default_factory=dict)
+    quiet_hours: dict = Field(default_factory=dict)
+    cookies: dict = Field(default_factory=dict)
 
 
 class PushTokenRegistration(BaseModel):
@@ -107,7 +111,7 @@ def _normalise_bullet_items(value):
     if isinstance(value, list):
         return [str(item).strip() for item in value if str(item).strip()]
     if isinstance(value, str):
-        cleaned = value.replace("•", "\n").replace(" - ", "\n").replace("; ", "\n")
+        cleaned = value.replace("\u2022", "\n").replace(" - ", "\n").replace("; ", "\n")
         return [item.strip(" -\n\t") for item in cleaned.splitlines() if item.strip(" -\n\t")]
     return []
 
@@ -282,7 +286,7 @@ def _build_metric_visuals(survival_predictions, growth_forecasts):
     return drawing
 
 
-# Render the SWOT quadrants as a branded 2×2 grid that matches the card style
+# Render the SWOT quadrants as a branded 2x2 grid that matches the card style
 # used throughout the rest of the PDF export.
 def _build_swot_grid(swot: dict) -> Table:
 
@@ -312,7 +316,7 @@ def _build_swot_grid(swot: dict) -> Table:
         # Light tinted content area with bullet items
         content_rows = [
             [Paragraph(
-                f"• {escape(str(item))}",
+                f"- {escape(str(item))}",
                 ParagraphStyle(
                     "SwotItem",
                     fontName="Helvetica",
@@ -323,7 +327,7 @@ def _build_swot_grid(swot: dict) -> Table:
                 ),
             )]
             for item in bullet_items
-        ] or [[Paragraph("—", ParagraphStyle("SwotEmpty", fontSize=9, textColor=BIZNESS_MUTED))]]
+        ] or [[Paragraph("-", ParagraphStyle("SwotEmpty", fontSize=9, textColor=BIZNESS_MUTED))]]
 
         content_cell = Table(content_rows, colWidths=[238])
         content_cell.setStyle(TableStyle([
@@ -346,12 +350,12 @@ def _build_swot_grid(swot: dict) -> Table:
         ]))
         return quadrant
 
-    strengths_cell     = _swot_cell("✦  Strengths",     swot.get("strengths",     []), BIZNESS_ACCENT,              colors.HexColor("#ECFDF3"))
-    weaknesses_cell    = _swot_cell("⚠  Weaknesses",    swot.get("weaknesses",    []), BIZNESS_WARNING,             colors.HexColor("#FFF7ED"))
-    opportunities_cell = _swot_cell("◈  Opportunities", swot.get("opportunities", []), BIZNESS_SECONDARY,           colors.HexColor("#EEF4FF"))
-    threats_cell       = _swot_cell("⬡  Threats",       swot.get("threats",       []), colors.HexColor("#DC2626"),  colors.HexColor("#FEF2F2"))
+    strengths_cell     = _swot_cell("Strengths",      swot.get("strengths",     []), BIZNESS_ACCENT,              colors.HexColor("#ECFDF3"))
+    weaknesses_cell    = _swot_cell("Weaknesses",     swot.get("weaknesses",    []), BIZNESS_WARNING,             colors.HexColor("#FFF7ED"))
+    opportunities_cell = _swot_cell("Opportunities",  swot.get("opportunities", []), BIZNESS_SECONDARY,           colors.HexColor("#EEF4FF"))
+    threats_cell       = _swot_cell("Threats",        swot.get("threats",       []), colors.HexColor("#DC2626"),  colors.HexColor("#FEF2F2"))
 
-    # Arrange the four quadrants into a 2×2 grid with a small gutter between cells
+    # Arrange the four quadrants into a 2x2 grid with a small gutter between cells
     grid = Table(
         [[strengths_cell, weaknesses_cell], [opportunities_cell, threats_cell]],
         colWidths=[250, 250],
@@ -371,7 +375,7 @@ def _build_swot_grid(swot: dict) -> Table:
 def _build_cover_block(user, export_type, generated_at):
     hero = Table(
         [
-            [Paragraph("BizNess Data Export", ParagraphStyle(
+            [Paragraph("BizSense Data Export", ParagraphStyle(
                 "HeroTitle",
                 fontName="Helvetica-Bold",
                 fontSize=26,
@@ -452,10 +456,82 @@ def _draw_page_footer(canvas, doc):
     canvas.line(doc.leftMargin, 24, page_width - doc.rightMargin, 24)
     canvas.setFont("Helvetica", 8)
     canvas.setFillColor(BIZNESS_MUTED)
-    canvas.drawString(doc.leftMargin, 12, "BizNess Export")
+    canvas.drawString(doc.leftMargin, 12, "BizSense Export")
     canvas.drawRightString(page_width - doc.rightMargin, 12, f"Page {canvas.getPageNumber()}")
     canvas.restoreState()
 
+
+
+def _append_market_intelligence_export_sections(story, report, section_style, body_style, bullet_style, styles):
+    """Render newer market intelligence fields when present; old reports simply skip them."""
+    market = report.get("market_intelligence") if isinstance(report.get("market_intelligence"), dict) else {}
+    if market:
+        story.append(_section_heading("Market Intelligence", section_style))
+        if market.get("sector_snapshot"):
+            story.append(Paragraph(f"<b>Sector snapshot:</b> {_rich_text(market.get('sector_snapshot'))}", body_style))
+        if market.get("competition_pressure"):
+            story.append(Paragraph(f"<b>Competition pressure:</b> {_rich_text(market.get('competition_pressure'))}", body_style))
+        for label, key in [("Local demand signals", "local_demand_signals"), ("Customer behavior trends", "customer_behavior_trends")]:
+            items = _normalise_bullet_items(market.get(key))
+            if items:
+                story.append(Paragraph(label, styles["Heading3"]))
+                for item in items:
+                    story.append(Paragraph(_rich_text(item), bullet_style, bulletText="-"))
+        story.append(Spacer(1, 12))
+
+    sector_trends = _normalise_bullet_items(report.get("sector_trends"))
+    if sector_trends:
+        story.append(_section_heading("Sector Trends", section_style))
+        for item in sector_trends:
+            story.append(Paragraph(_rich_text(item), bullet_style, bulletText="-"))
+        story.append(Spacer(1, 12))
+
+    opportunities = report.get("growth_opportunities") if isinstance(report.get("growth_opportunities"), list) else []
+    if opportunities:
+        story.append(_section_heading("Growth Opportunities", section_style))
+        for item in opportunities:
+            if isinstance(item, dict):
+                title = _stringify_value(item.get("title", "Opportunity"))
+                detail = f"{item.get('why_it_matters', '')}\n{item.get('how_to_act', '')}\nDifficulty: {item.get('difficulty', 'Medium')}"
+                story.append(Paragraph(f"<b>{escape(title)}</b>", body_style))
+                story.append(Paragraph(_rich_text(detail), body_style))
+                story.append(Spacer(1, 6))
+        story.append(Spacer(1, 8))
+
+    risks = report.get("risk_watchlist") if isinstance(report.get("risk_watchlist"), list) else []
+    if risks:
+        story.append(_section_heading("Risk Watchlist", section_style))
+        for item in risks:
+            if isinstance(item, dict):
+                title = _stringify_value(item.get("risk", "Risk"))
+                detail = f"Impact: {item.get('impact', '')}\nMitigation: {item.get('mitigation', '')}"
+                story.append(Paragraph(f"<b>{escape(title)}</b>", body_style))
+                story.append(Paragraph(_rich_text(detail), body_style))
+                story.append(Spacer(1, 6))
+        story.append(Spacer(1, 8))
+
+    action_plan = report.get("next_90_day_action_plan") if isinstance(report.get("next_90_day_action_plan"), dict) else {}
+    if action_plan:
+        story.append(_section_heading("90-Day Growth Plan", section_style))
+        for label, key in [("Days 1-30", "days_1_30"), ("Days 31-60", "days_31_60"), ("Days 61-90", "days_61_90")]:
+            items = _normalise_bullet_items(action_plan.get(key))
+            if items:
+                story.append(Paragraph(label, styles["Heading3"]))
+                for item in items:
+                    story.append(Paragraph(_rich_text(item), bullet_style, bulletText="-"))
+        story.append(Spacer(1, 12))
+
+    kpis = report.get("recommended_kpis") if isinstance(report.get("recommended_kpis"), list) else []
+    if kpis:
+        story.append(_section_heading("KPIs to Track", section_style))
+        for item in kpis:
+            if isinstance(item, dict):
+                title = _stringify_value(item.get("name", "KPI"))
+                detail = f"Target: {item.get('target', '')}\nWhy it matters: {item.get('why_it_matters', '')}"
+                story.append(Paragraph(f"<b>{escape(title)}</b>", body_style))
+                story.append(Paragraph(_rich_text(detail), body_style))
+                story.append(Spacer(1, 6))
+        story.append(Spacer(1, 8))
 
 # Assemble the full branded PDF using the export payload already prepared by the API route.
 def _build_pdf_export(export_data: dict, export_type: str) -> bytes:
@@ -463,7 +539,7 @@ def _build_pdf_export(export_data: dict, export_type: str) -> bytes:
     doc = SimpleDocTemplate(
         buffer,
         pagesize=A4,
-        title=f"BizNess Export {export_type.title()}",
+        title=f"BizSense Export {export_type.title()}",
         leftMargin=36,
         rightMargin=36,
         topMargin=42,
@@ -531,7 +607,7 @@ def _build_pdf_export(export_data: dict, export_type: str) -> bytes:
     story = [
         *_build_cover_block(user, export_type, generated_at),
         Paragraph(
-            "This report presents your BizNess account, business portfolio, and prediction activity in a polished export format.",
+            "This report presents your BizSense account, business portfolio, and prediction activity in a polished export format.",
             subtitle_style,
         ),
         Spacer(1, 10),
@@ -693,8 +769,10 @@ def _build_pdf_export(export_data: dict, export_type: str) -> bytes:
         if future_recommendations:
             story.append(_section_heading("Priority Recommendations", section_style))
             for item in future_recommendations:
-                story.append(Paragraph(_rich_text(item), bullet_style, bulletText="•"))
+                story.append(Paragraph(_rich_text(item), bullet_style, bulletText="-"))
             story.append(Spacer(1, 12))
+
+        _append_market_intelligence_export_sections(story, latest_growth_report, section_style, body_style, bullet_style, styles)
 
         if mit_plan:
             story.append(_section_heading("Business Plan Highlights", section_style))
@@ -718,19 +796,37 @@ def _build_pdf_export(export_data: dict, export_type: str) -> bytes:
                 ]
             )
 
-        # ── SWOT Analysis — rendered as a branded 2×2 grid ──
+        # SWOT Analysis rendered as a branded 2x2 grid
         swot = latest_growth_report.get("swot_analysis")
         if swot and isinstance(swot, dict):
             story.append(_section_heading("SWOT Analysis", section_style))
             story.append(_build_swot_grid(swot))
             story.append(Spacer(1, 14))
 
-        # ── Regional Competitor Intelligence ──
+        # Regional Competitor Intelligence
         competitors_data = latest_growth_report.get("regional_competitors")
         if competitors_data and isinstance(competitors_data, dict):
             story.append(_section_heading("Regional Competitor Intelligence", section_style))
 
-            # Three tiers: local → national → international
+            competitor_header_style = ParagraphStyle(
+                "CompetitorHeader",
+                parent=styles["BodyText"],
+                fontName="Helvetica-Bold",
+                fontSize=8.5,
+                leading=10,
+                textColor=colors.white,
+            )
+            competitor_cell_style = ParagraphStyle(
+                "CompetitorCell",
+                parent=styles["BodyText"],
+                fontName="Helvetica",
+                fontSize=8.2,
+                leading=11,
+                textColor=colors.HexColor("#1F2937"),
+                wordWrap="CJK",
+            )
+
+            # Three tiers: local, national, and international
             competitor_tiers = [
                 ("Local Competitors",         competitors_data.get("local", []),         BIZNESS_SECONDARY),
                 ("National Competitors",      competitors_data.get("national", []),      colors.HexColor("#7C3AED")),
@@ -757,18 +853,23 @@ def _build_pdf_export(export_data: dict, export_type: str) -> bytes:
                     )
                 )
 
-                # One table per tier — Name / Type / Threat Level / Why They Matter
-                tier_rows = [["Name", "Type", "Threat", "Why They Matter"]]
+                # One table per tier - Name / Type / Threat Level / Why They Matter
+                tier_rows = [[
+                    Paragraph("Name", competitor_header_style),
+                    Paragraph("Type", competitor_header_style),
+                    Paragraph("Threat", competitor_header_style),
+                    Paragraph("Why They Matter", competitor_header_style),
+                ]]
                 for entry in tier_entries:
                     tier_rows.append([
-                        _stringify_value(entry.get("name")),
-                        _stringify_value(entry.get("type")),
-                        _stringify_value(entry.get("threat_level")),
-                        _safe_paragraph(entry.get("why_they_matter")),
+                        Paragraph(_safe_paragraph(entry.get("name")), competitor_cell_style),
+                        Paragraph(_safe_paragraph(entry.get("type")), competitor_cell_style),
+                        Paragraph(_safe_paragraph(entry.get("threat_level")), competitor_cell_style),
+                        Paragraph(_safe_paragraph(entry.get("why_they_matter")), competitor_cell_style),
                     ])
 
-                # Use colWidths that give most space to the "Why" column
-                comp_table = Table(tier_rows, colWidths=[130, 60, 50, 240], repeatRows=1, hAlign="LEFT")
+                # Wider narrative column and Paragraph cells keep long competitor analysis inside the page.
+                comp_table = Table(tier_rows, colWidths=[92, 58, 48, 322], repeatRows=1, hAlign="LEFT")
                 comp_table.setStyle(
                     TableStyle([
                         ("BACKGROUND",   (0, 0), (-1, 0),  BIZNESS_PRIMARY),
@@ -799,7 +900,15 @@ def update_preferences(prefs: PreferencesUpdate, current_user: dict = Depends(ge
         current_res = supabase.table("sme").select("preferences").eq("sme_id", current_user["sme_id"]).execute()
         current_prefs = current_res.data[0].get("preferences") if current_res.data else {}
         current_prefs = current_prefs if isinstance(current_prefs, dict) else {}
-        combined_prefs = {**current_prefs, "notifs": prefs.notifs, "privacy": prefs.privacy}
+        combined_prefs = {
+            **current_prefs,
+            "notifs": prefs.notifs,
+            "privacy": prefs.privacy,
+            "appearance": prefs.appearance,
+            "integrations": prefs.integrations,
+            "quiet_hours": prefs.quiet_hours,
+            "cookies": prefs.cookies,
+        }
         supabase.table("sme").update({"preferences": combined_prefs}).eq("sme_id", current_user["sme_id"]).execute()
         return {"status": "Success", "message": "Settings saved!"}
     except Exception as e:
@@ -862,11 +971,11 @@ def export_user_data(type: str = "all", format: str = "pdf", current_user: dict 
         if export_format == "json":
             file_bytes = json.dumps(export_data, indent=4).encode("utf-8")
             media_type = "application/json"
-            filename = f"BizNess_Export_{type}.json"
+            filename = f"BizSense_Export_{type}.json"
         else:
             file_bytes = _build_pdf_export(export_data, type)
             media_type = "application/pdf"
-            filename = f"BizNess_Export_{type}.pdf"
+            filename = f"BizSense_Export_{type}.pdf"
 
         return StreamingResponse(
             BytesIO(file_bytes),

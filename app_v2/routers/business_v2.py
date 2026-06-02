@@ -4,7 +4,7 @@ from app.routers.dashboard import get_current_user
 from app_v2.schemas_v2 import BusinessRegistrationV2, BusinessProfileUpdateV2
 
 # ============================================================
-# BizNess OS — Business Router V2
+# BizSense OS — Business Router V2
 # Saves all V3 fields to business_profile_v2 table.
 # Reuses the existing owner + business table from V1
 # (no structural changes to V1 tables).

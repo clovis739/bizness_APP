@@ -3,7 +3,7 @@
 
 ---
 
-#  BizNess SME Analytics Engine (Backend)
+#  BizSense SME Analytics Engine (Backend)
 
 An enterprise-grade, AI-powered backend designed to analyze, predict, and advise Small and Medium Enterprises (SMEs) in Cameroon.
 
@@ -205,3 +205,6 @@ Your frontend sends that token to your FastAPI backend.
 Your backend securely asks Google: "Who does this token belong to?"
 
 Your backend checks Supabase, creates the user (if new), sets the HTTP-Only cookie, and logs them in!
+
+
+python -m uvicorn main_v2:app --host 0.0.0.0 --port 8000

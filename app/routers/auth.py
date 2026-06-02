@@ -1,4 +1,4 @@
-import os
+﻿import os
 import random
 import smtplib
 import uuid
@@ -36,9 +36,9 @@ from app.security import (
 
 load_dotenv()
 
-# Set COOKIE_SECURE=true in your production .env file.
-# Keeps cookies HTTP-only for local dev, HTTPS-only in production.
+# Set COOKIE_SECURE=true in production. Cross-domain web deployments also need SameSite=None.
 COOKIE_SECURE = os.getenv("COOKIE_SECURE", "false").lower() == "true"
+COOKIE_SAMESITE = os.getenv("COOKIE_SAMESITE", "none" if COOKIE_SECURE else "lax").lower()
 
 MOBILE_MAGIC_LINK_BASE_URL = os.getenv(
     "MOBILE_MAGIC_LINK_BASE_URL",
@@ -433,7 +433,7 @@ def login_sme(credentials: SMELogin, response: Response):
             value=user["sme_id"],
             httponly=True,
             secure=COOKIE_SECURE,
-            samesite="lax",
+            samesite=COOKIE_SAMESITE,
             max_age=86400,
         )
         log_audit_action(
@@ -590,7 +590,7 @@ def google_auth(token_data: GoogleToken, response: Response):
             value=user["sme_id"],
             httponly=True,
             secure=COOKIE_SECURE,
-            samesite="lax",
+            samesite=COOKIE_SAMESITE,
             max_age=86400,
         )
         log_audit_action(
@@ -709,7 +709,7 @@ def verify_magic_link(request: MagicLinkVerify, response: Response):
             value=user["sme_id"],
             httponly=True,
             secure=COOKIE_SECURE,
-            samesite="lax",
+            samesite=COOKIE_SAMESITE,
             max_age=86400,
         )
         return {
@@ -761,7 +761,7 @@ def logout_sme(response: Response):
         key="bizness_session",
         httponly=True,
         secure=COOKIE_SECURE,
-        samesite="lax",
+        samesite=COOKIE_SAMESITE,
     )
     return {"status": "Success", "message": "Logged out successfully"}
 

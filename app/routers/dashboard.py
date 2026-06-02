@@ -100,6 +100,7 @@ def get_dashboard_data(request: Request, current_user: dict = Depends(get_curren
                 "data": {
                     "user": user_payload,
                     "has_business_profile": False,
+                    "has_v2_business_profile": False,
                     "business": None,
                     "businesses": [],
                     "survival_history": [],
@@ -124,16 +125,28 @@ def get_dashboard_data(request: Request, current_user: dict = Depends(get_curren
                 .eq("business_id", biz_id)
                 .execute()
             )
-            profile_data = profile_res.data[0] if profile_res.data else None
-            biz_full = {**biz, **profile_data} if profile_data else dict(biz)
+            profile_v2_res = (
+                supabase
+                .table("business_profile_v2")
+                .select("*")
+                .eq("business_id", biz_id)
+                .execute()
+            )
+            profile_data = profile_res.data[0] if profile_res.data else {}
+            profile_v2_data = profile_v2_res.data[0] if profile_v2_res.data else {}
+            # Prefer V2 profile fields because the web and mobile prediction flow now use V2.
+            biz_full = {**biz, **profile_data, **profile_v2_data}
+            biz_full["business_name"] = biz_full.get("business_name") or biz.get("name")
+            biz_full["has_v2_profile"] = bool(profile_v2_data)
             biz_full["phone"] = owner.get("phone")
             biz_full["logo_url"] = _resolve_asset_url(request, LOGOS_DIR, biz_id)
             businesses_payload.append(biz_full)
 
         # The primary business is the first one (oldest registration)
         business_payload = businesses_payload[0] if businesses_payload else None
+        has_v2_business_profile = any(item.get("has_v2_profile") for item in businesses_payload)
 
-        # History from the primary business â€” frontend can query per-business via businessId
+        # History from the primary business; frontend can query per-business via businessId
         if business_payload:
             primary_id = business_payload["business_id"]
             survival_history = (
@@ -163,6 +176,7 @@ def get_dashboard_data(request: Request, current_user: dict = Depends(get_curren
             "data": {
                 "user": user_payload,
                 "has_business_profile": business_payload is not None,
+                "has_v2_business_profile": has_v2_business_profile,
                 "business": business_payload,
                 "businesses": businesses_payload,
                 "survival_history": survival_history,

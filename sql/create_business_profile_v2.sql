@@ -1,5 +1,5 @@
 -- ============================================================
--- BizNess OS — business_profile_v2 Migration
+-- BizSense OS — business_profile_v2 Migration
 -- Run this ONCE in your Supabase SQL editor.
 -- Does NOT alter or touch the existing business_profile table.
 -- ============================================================

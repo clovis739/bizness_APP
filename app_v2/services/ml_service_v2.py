@@ -5,10 +5,10 @@ import pandas as pd
 from fastapi import HTTPException
 
 # ============================================================
-# BizNess OS — ML Service V2
+# BizSense OS — ML Service V2
 # Loads V3 models from backend/models/
 # Implements full 49-feature engineering pipeline matching
-# the exact schema used in BizNess_Model_V3.ipynb
+# the exact schema used in BizSense_Model_V3.ipynb
 # ============================================================
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -101,7 +101,7 @@ def load_models():
 def _derive_power_outage_frequency(electricity_index: float, seed: int = 0) -> int:
     """
     Derives monthly power outage frequency from the region's electricity index.
-    Matches the exact formula used in BizNess_Model_V3.ipynb Cell 04.
+    Matches the exact formula used in BizSense_Model_V3.ipynb Cell 04.
     World Bank baseline: 93.3% of Cameroonian firms experience outages,
     averaging 10.4 per month.
     """

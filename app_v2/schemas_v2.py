@@ -3,7 +3,7 @@ from typing import Optional
 from enum import Enum
 
 # ============================================================
-# BizNess OS — Pydantic Schemas V2
+# BizSense OS — Pydantic Schemas V2
 # Extends V1 schemas with all fields required by V3 ML models
 # V1 schemas are NOT modified — these are standalone additions
 # ============================================================

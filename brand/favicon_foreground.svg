@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
-  <!-- BizNess OS — Foreground icon (blue on white, transparent-ready) -->
+  <!-- BizSense OS — Foreground icon (blue on white, transparent-ready) -->
   <rect width="64" height="64" rx="14" fill="#ffffff"/>
   <rect x="7" y="7" width="50" height="50" rx="11" fill="#0F3FA6"/>
   <g transform="translate(32,32)">
