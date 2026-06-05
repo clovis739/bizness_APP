@@ -231,11 +231,11 @@ def send_magic_link_email(receiver_email: str, token: str):
         server.sendmail(sender_email, receiver_email, message.as_string())
         server.quit()
     except Exception as error:
+        # This function can run after the HTTP response has already been sent.
+        # Log SMTP failures without raising, otherwise Starlette reports
+        # "response already started" and the server records an ASGI exception.
         print(f"SMTP ERROR: {error}")
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to send magic link email.",
-        ) from error
+        return
 
 
 def validate_magic_link_token(email: str, token: str) -> dict:
