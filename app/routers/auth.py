@@ -182,7 +182,8 @@ def send_otp_email(receiver_email: str, otp_code: str):
     message.attach(MIMEText(html, "html"))
 
     try:
-        server = smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=15)
+        server = smtplib.SMTP("smtp.gmail.com", 587, timeout=15)
+        server.starttls()
         server.login(sender_email, sender_password)
         server.sendmail(sender_email, receiver_email, message.as_string())
         server.quit()
@@ -226,7 +227,8 @@ def send_magic_link_email(receiver_email: str, token: str):
     message.attach(MIMEText(html, "html"))
 
     try:
-        server = smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=15)
+        server = smtplib.SMTP("smtp.gmail.com", 587, timeout=15)
+        server.starttls()
         server.login(sender_email, sender_password)
         server.sendmail(sender_email, receiver_email, message.as_string())
         server.quit()

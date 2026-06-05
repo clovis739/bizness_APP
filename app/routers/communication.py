@@ -76,7 +76,8 @@ def _open_smtp_server():
         return None
 
     try:
-        server = smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=20)
+        server = smtplib.SMTP("smtp.gmail.com", 587, timeout=20)
+        server.starttls()
         server.login(SMTP_EMAIL, SMTP_PASSWORD)
         return server
     except Exception as error:
