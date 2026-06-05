@@ -1,4 +1,4 @@
-﻿import os
+import os
 import random
 import smtplib
 import uuid
@@ -10,7 +10,7 @@ from urllib.parse import urlencode
 import bcrypt
 import requests
 from dotenv import load_dotenv
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response
 
 from app.database import log_audit_action, supabase
 from app.schemas import (
@@ -43,6 +43,10 @@ COOKIE_SAMESITE = os.getenv("COOKIE_SAMESITE", "none" if COOKIE_SECURE else "lax
 MOBILE_MAGIC_LINK_BASE_URL = os.getenv(
     "MOBILE_MAGIC_LINK_BASE_URL",
     "biznessmobileapp://magic-link",
+)
+WEB_MAGIC_LINK_BASE_URL = os.getenv(
+    "WEB_MAGIC_LINK_BASE_URL",
+    os.getenv("FRONTEND_URL", "http://localhost:3000").split(",")[0].strip().rstrip("/") + "/verify-link",
 )
 _supabase_url = os.getenv("SUPABASE_URL", "").rstrip("/")
 SUPABASE_AUTH_BASE_URL = f"{_supabase_url}/auth/v1" if _supabase_url else ""
@@ -178,7 +182,7 @@ def send_otp_email(receiver_email: str, otp_code: str):
     message.attach(MIMEText(html, "html"))
 
     try:
-        server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
+        server = smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=15)
         server.login(sender_email, sender_password)
         server.sendmail(sender_email, receiver_email, message.as_string())
         server.quit()
@@ -193,7 +197,7 @@ def send_otp_email(receiver_email: str, otp_code: str):
 def send_magic_link_email(receiver_email: str, token: str):
     sender_email = os.getenv("SMTP_EMAIL")
     sender_password = os.getenv("SMTP_PASSWORD")
-    magic_link = f"{MOBILE_MAGIC_LINK_BASE_URL}?{urlencode({'email': receiver_email, 'token': token})}"
+    magic_link = f"{WEB_MAGIC_LINK_BASE_URL}?{urlencode({'email': receiver_email, 'token': token})}"
 
     if not sender_email or not sender_password:
         print(f"\nWARNING: SMTP credentials missing! Link: {magic_link}\n")
@@ -222,7 +226,7 @@ def send_magic_link_email(receiver_email: str, token: str):
     message.attach(MIMEText(html, "html"))
 
     try:
-        server = smtplib.SMTP_SSL("smtp.gmail.com", 465)
+        server = smtplib.SMTP_SSL("smtp.gmail.com", 465, timeout=15)
         server.login(sender_email, sender_password)
         server.sendmail(sender_email, receiver_email, message.as_string())
         server.quit()
@@ -677,7 +681,7 @@ def mobile_exchange_supabase_email_link(payload: SupabaseEmailLinkExchange):
 
 
 @router.post("/magic-link/request")
-def request_magic_link(request: MagicLinkRequest):
+def request_magic_link(request: MagicLinkRequest, background_tasks: BackgroundTasks):
     try:
         user = get_user_by_email(request.email)
         if not user:
@@ -694,8 +698,8 @@ def request_magic_link(request: MagicLinkRequest):
             {"reset_otp": "magic:" + secure_token, "otp_expiry": expiry_time.isoformat()}
         ).eq("email", request.email).execute()
 
-        send_magic_link_email(request.email, secure_token)
-        return {"status": "Success", "message": "Magic link sent to your email!"}
+        background_tasks.add_task(send_magic_link_email, request.email, secure_token)
+        return {"status": "Success", "message": "Magic link queued. Check your email shortly."}
     except Exception as error:
         raise HTTPException(status_code=500, detail=str(error)) from error
 
