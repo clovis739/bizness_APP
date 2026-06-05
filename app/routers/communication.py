@@ -9,6 +9,7 @@ from dotenv import load_dotenv
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, UploadFile
 
 from app.database import supabase
+from app.email_service import open_smtp_server, send_email
 from app.schemas import BroadcastRequest, SubscribeRequest
 from app.security import get_current_user
 
@@ -75,14 +76,7 @@ def _open_smtp_server():
         print("Email credentials missing in .env. Skipping real email.")
         return None
 
-    try:
-        server = smtplib.SMTP("smtp.gmail.com", 587, timeout=20)
-        server.starttls()
-        server.login(SMTP_EMAIL, SMTP_PASSWORD)
-        return server
-    except Exception as error:
-        print(f"Failed to open SMTP connection: {error}")
-        return None
+    return open_smtp_server()
 
 
 # Send one branded HTML email, optionally reusing an existing SMTP connection.
@@ -94,32 +88,15 @@ def send_html_email(
     file_data: bytes = None,
     server=None,
 ):
-    owns_server = server is None
-    smtp_server = server or _open_smtp_server()
-    if smtp_server is None:
-        return False
-
-    try:
-        smtp_server.send_message(
-            _build_html_message(
-                to_email=to_email,
-                subject=subject,
-                html_content=html_content,
-                file_name=file_name,
-                file_data=file_data,
-            )
-        )
-        print(f"Branded email sent to {to_email}")
-        return True
-    except Exception as error:
-        print(f"Failed to send email to {to_email}: {error}")
-        return False
-    finally:
-        if owns_server:
-            try:
-                smtp_server.quit()
-            except Exception:
-                pass
+    return send_email(
+        to_email=to_email,
+        subject=subject,
+        html_content=html_content,
+        file_name=file_name,
+        file_data=file_data,
+        server=server,
+        raise_on_error=False,
+    )
 
 
 # Send the subscriber thank-you email and the admin alert over one shared SMTP session.

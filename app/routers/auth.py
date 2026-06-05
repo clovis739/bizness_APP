@@ -13,6 +13,7 @@ from dotenv import load_dotenv
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Response
 
 from app.database import log_audit_action, supabase
+from app.email_service import send_email
 from app.schemas import (
     ChangePasswordRequest,
     ForgotPassword,
@@ -147,98 +148,38 @@ def get_or_create_google_user(access_token: str) -> tuple[dict, bool]:
 
 
 def send_otp_email(receiver_email: str, otp_code: str):
-    sender_email = os.getenv("SMTP_EMAIL")
-    sender_password = os.getenv("SMTP_PASSWORD")
-
-    if not sender_email or not sender_password:
-        print(
-            f"\nWARNING: SMTP credentials missing in .env.\nOTP for {receiver_email}: {otp_code}\n"
-        )
-        return
-
-    message = MIMEMultipart("alternative")
-    message["Subject"] = "Your BizSense OS Password Reset Code"
-    message["From"] = f"BizSense OS <{sender_email}>"
-    message["To"] = receiver_email
-
     html = f"""
     <html>
       <body style="font-family: Arial, sans-serif; color: #333; background-color: #f8f9fa; padding: 20px;">
-        <div style="max-w: 500px; margin: 0 auto; background-color: #ffffff; padding: 30px; border-radius: 15px; border: 1px solid #eaeaea;">
+        <div style="max-width: 500px; margin: 0 auto; background-color: #ffffff; padding: 30px; border-radius: 15px; border: 1px solid #eaeaea;">
             <h2 style="color: #111827; margin-top: 0;">Password Reset Request</h2>
             <p style="color: #4b5563; line-height: 1.5;">You requested to reset your BizSense OS password. Please use the verification code below to securely access your account.</p>
-
             <div style="background-color: #f0f4ff; border: 1px solid #dde5fb; padding: 20px; text-align: center; border-radius: 10px; margin: 25px 0;">
                 <h1 style="color: #476DDC; letter-spacing: 8px; margin: 0; font-size: 32px;">{otp_code}</h1>
             </div>
-
             <p style="color: #4b5563; font-size: 13px;">This code will expire in <strong>15 minutes</strong>.</p>
             <p style="color: #9ca3af; font-size: 12px; margin-top: 30px;">If you did not request this reset, please ignore this email or contact support.</p>
         </div>
       </body>
     </html>
     """
-
-    message.attach(MIMEText(html, "html"))
-
-    try:
-        server = smtplib.SMTP("smtp.gmail.com", 587, timeout=15)
-        server.starttls()
-        server.login(sender_email, sender_password)
-        server.sendmail(sender_email, receiver_email, message.as_string())
-        server.quit()
-    except Exception as error:
-        print(f"SMTP ERROR: {error}")
-        raise HTTPException(
-            status_code=500,
-            detail="Failed to send email. Please check server configuration.",
-        ) from error
-
+    send_email(receiver_email, "Your BizSense OS Password Reset Code", html, raise_on_error=True)
 
 def send_magic_link_email(receiver_email: str, token: str):
-    sender_email = os.getenv("SMTP_EMAIL")
-    sender_password = os.getenv("SMTP_PASSWORD")
     magic_link = f"{WEB_MAGIC_LINK_BASE_URL}?{urlencode({'email': receiver_email, 'token': token})}"
-
-    if not sender_email or not sender_password:
-        print(f"\nWARNING: SMTP credentials missing! Link: {magic_link}\n")
-        return
-
-    message = MIMEMultipart("alternative")
-    message["Subject"] = "Sign in to BizSense OS"
-    message["From"] = f"BizSense OS <{sender_email}>"
-    message["To"] = receiver_email
-
     html = f"""
     <html>
       <body style="font-family: Arial, sans-serif; color: #333; background-color: #f8f9fa; padding: 20px;">
-        <div style="max-w: 500px; margin: 0 auto; background-color: #ffffff; padding: 30px; border-radius: 15px; border: 1px solid #eaeaea; text-align: center;">
+        <div style="max-width: 500px; margin: 0 auto; background-color: #ffffff; padding: 30px; border-radius: 15px; border: 1px solid #eaeaea; text-align: center;">
             <h2 style="color: #111827; margin-top: 0;">Your Magic Link</h2>
             <p style="color: #4b5563; line-height: 1.5; margin-bottom: 30px;">Click the secure button below to instantly sign in to your BizSense OS dashboard.</p>
-
             <a href="{magic_link}" style="background-color: #476DDC; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 10px; font-weight: bold; display: inline-block;">Sign In to BizSense</a>
-
             <p style="color: #9ca3af; font-size: 12px; margin-top: 40px;">This link expires in 15 minutes. If you did not request this, please ignore this email.</p>
         </div>
       </body>
     </html>
     """
-
-    message.attach(MIMEText(html, "html"))
-
-    try:
-        server = smtplib.SMTP("smtp.gmail.com", 587, timeout=15)
-        server.starttls()
-        server.login(sender_email, sender_password)
-        server.sendmail(sender_email, receiver_email, message.as_string())
-        server.quit()
-    except Exception as error:
-        # This function can run after the HTTP response has already been sent.
-        # Log SMTP failures without raising, otherwise Starlette reports
-        # "response already started" and the server records an ASGI exception.
-        print(f"SMTP ERROR: {error}")
-        return
-
+    send_email(receiver_email, "Sign in to BizSense OS", html, raise_on_error=False)
 
 def validate_magic_link_token(email: str, token: str) -> dict:
     user = get_user_by_email(email)
