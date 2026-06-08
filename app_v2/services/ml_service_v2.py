@@ -301,7 +301,8 @@ def run_predictions(business_data: dict) -> dict:
             # Cox PH predict_median returns the median survival time in months
             cox_median_time = float(cox_model.predict_median(cox_df).iloc[0])
         except Exception:
-            cox_median_time = None  # Non-critical — don't crash prediction
+            cox_median_time = None  
+            # Non-critical — don't crash prediction
 
         # Step 5: Return comprehensive result
         return {

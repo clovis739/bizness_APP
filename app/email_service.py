@@ -9,8 +9,19 @@ import requests
 from fastapi import HTTPException
 
 
+def _env_bool(name: str, default: bool = False) -> bool:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {"1", "true", "yes", "on"}
+
+
 def _email_from() -> str:
     return os.getenv("EMAIL_FROM") or f"BizSense OS <{os.getenv('SMTP_EMAIL', '')}>"
+
+
+def _email_provider() -> str:
+    return os.getenv("EMAIL_PROVIDER", "auto").strip().lower()
 
 
 def send_resend_email(
@@ -81,43 +92,44 @@ def build_html_message(
 
 
 def open_smtp_server():
-    smtp_email = os.getenv("SMTP_EMAIL")
+    smtp_host = os.getenv("SMTP_HOST", "smtp.gmail.com")
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_username = os.getenv("SMTP_USERNAME") or os.getenv("SMTP_EMAIL")
     smtp_password = os.getenv("SMTP_PASSWORD")
-    if not smtp_email or not smtp_password:
-        print("Email credentials missing in .env. Skipping SMTP email.")
+    smtp_timeout = int(os.getenv("SMTP_TIMEOUT", "10"))
+    use_ssl = _env_bool("SMTP_USE_SSL", smtp_port == 465)
+    use_starttls = _env_bool("SMTP_USE_STARTTLS", not use_ssl)
+
+    if not smtp_host or not smtp_username or not smtp_password:
+        print("SMTP configuration missing. Skipping SMTP email.")
         return None
 
     try:
-        server = smtplib.SMTP("smtp.gmail.com", 587, timeout=8)
-        server.starttls()
-        server.login(smtp_email, smtp_password)
+        if use_ssl:
+            server = smtplib.SMTP_SSL(smtp_host, smtp_port, timeout=smtp_timeout)
+        else:
+            server = smtplib.SMTP(smtp_host, smtp_port, timeout=smtp_timeout)
+            if use_starttls:
+                server.starttls()
+
+        server.login(smtp_username, smtp_password)
         return server
     except Exception as error:
-        print(f"Failed to open SMTP connection: {error}")
+        print(f"Failed to open SMTP connection to {smtp_host}:{smtp_port}: {error}")
         return None
 
 
-def send_email(
+def send_smtp_email(
     to_email: str,
     subject: str,
     html_content: str,
     file_name: str | None = None,
     file_data: bytes | None = None,
     server=None,
-    raise_on_error: bool = False,
-) -> bool:
-    api_result = send_resend_email(to_email, subject, html_content, file_name, file_data)
-    if api_result is True:
-        print(f"Email sent to {to_email} via Resend")
-        return True
-    if api_result is False and raise_on_error:
-        raise HTTPException(status_code=500, detail="Failed to send email through email provider.")
-
+):
     owns_server = server is None
     smtp_server = server or open_smtp_server()
     if smtp_server is None:
-        if raise_on_error:
-            raise HTTPException(status_code=500, detail="Failed to connect to email server.")
         return False
 
     try:
@@ -134,8 +146,6 @@ def send_email(
         return True
     except Exception as error:
         print(f"Failed to send email to {to_email}: {error}")
-        if raise_on_error:
-            raise HTTPException(status_code=500, detail="Failed to send email.") from error
         return False
     finally:
         if owns_server:
@@ -143,3 +153,33 @@ def send_email(
                 smtp_server.quit()
             except Exception:
                 pass
+
+
+def send_email(
+    to_email: str,
+    subject: str,
+    html_content: str,
+    file_name: str | None = None,
+    file_data: bytes | None = None,
+    server=None,
+    raise_on_error: bool = False,
+) -> bool:
+    provider = _email_provider()
+
+    if provider == "smtp":
+        sent = send_smtp_email(to_email, subject, html_content, file_name, file_data, server)
+    elif provider == "resend":
+        sent = send_resend_email(to_email, subject, html_content, file_name, file_data) is True
+    else:
+        resend_result = send_resend_email(to_email, subject, html_content, file_name, file_data)
+        if resend_result is True:
+            print(f"Email sent to {to_email} via Resend")
+            return True
+        sent = send_smtp_email(to_email, subject, html_content, file_name, file_data, server)
+
+    if sent:
+        return True
+
+    if raise_on_error:
+        raise HTTPException(status_code=500, detail="Failed to send email.")
+    return False
