@@ -82,7 +82,7 @@ def load_models():
     global survival_model, lgb_model, cat_model, cox_model, profit_model
     global survival_features, profit_features, cox_features, label_encoders, scaler_lr
     try:
-        print("🤖 Loading V3 AI Models...")
+        print(" Loading V3 AI Models...")
         survival_model    = joblib.load(SURVIVAL_MODEL_PATH)
         lgb_model         = joblib.load(LGB_MODEL_PATH)
         cat_model         = joblib.load(CAT_MODEL_PATH)

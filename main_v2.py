@@ -1,4 +1,4 @@
-import os
+﻿import os
 from contextlib import asynccontextmanager
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -21,9 +21,11 @@ from app import settings, market
 # V2-only routers
 from app_v2.routers.business_v2 import router as business_v2_router
 from app_v2.routers.predict_v2  import router as predict_v2_router
+from app_v2.routers.intelligence_v2 import router as intelligence_v2_router
 
 # V3 model loader
 from app_v2.services.ml_service_v2 import load_models
+from app_v2.services.intelligence_fetcher import refresh_market_intelligence
 
 # Rate limiter
 from slowapi import _rate_limit_exceeded_handler
@@ -56,7 +58,7 @@ def send_daily_newsletter():
                         <strong>BizSense Tip:</strong> Keeping energy overhead below 15% increases
                         your 3-year survival probability by over 40% in the Cameroonian market.
                     </p>
-                    <a href="https://bizsense.cm"
+                    <a href="https://bizsense.com"
                        style="display:inline-block;background:#3B7FFF;color:#fff;
                               text-decoration:none;padding:12px 24px;border-radius:8px;
                               font-weight:bold;margin-top:15px;">
@@ -75,6 +77,15 @@ def send_daily_newsletter():
 # ============================================================
 # LIFESPAN - startup / shutdown
 # ============================================================
+def refresh_market_intelligence_job():
+    """Refresh cached market intelligence from trusted online sources."""
+    print("Refreshing market intelligence sources...")
+    try:
+        summary = refresh_market_intelligence()
+        print(f"Market intelligence refresh complete: {summary}")
+    except Exception as error:
+        print(f"Market intelligence refresh failed: {error}")
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     print("BizSense OS V2 starting up...")
@@ -83,6 +94,7 @@ async def lifespan(app: FastAPI):
 
     scheduler = BackgroundScheduler()
     scheduler.add_job(send_daily_newsletter, "cron", hour=8, minute=0)
+    scheduler.add_job(refresh_market_intelligence_job, "interval", hours=6, id="market_intelligence_refresh", replace_existing=True)
     scheduler.start()
     print("Background scheduler started.")
 
@@ -123,8 +135,8 @@ base_origins = [
     "http://127.0.0.1:3001",
     "http://localhost:3002",
     "http://127.0.0.1:3002",
-    "https://bizsense.cm",
-    "https://www.bizsense.cm",
+    "https://bizsense.com",
+    "https://www.bizsense.com",
     "https://bizness-frontend-cyan.vercel.app",
 ]
 configured_origins = [
@@ -154,6 +166,7 @@ app.include_router(market.router)          # /api/v1/market - unchanged
 
 app.include_router(business_v2_router)     # /api/v2/business
 app.include_router(predict_v2_router)      # /api/v2/predict
+app.include_router(intelligence_v2_router) # /api/v2/intelligence
 
 
 # ============================================================

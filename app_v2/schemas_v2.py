@@ -1,15 +1,15 @@
-from pydantic import BaseModel, Field
+﻿from pydantic import BaseModel, Field
 from typing import Optional
 from enum import Enum
 
 # ============================================================
-# BizSense OS — Pydantic Schemas V2
+# BizSense OS â€” Pydantic Schemas V2
 # Extends V1 schemas with all fields required by V3 ML models
-# V1 schemas are NOT modified — these are standalone additions
+# V1 schemas are NOT modified â€” these are standalone additions
 # ============================================================
 
 
-# ── Enums for strict validation ──────────────────────────────
+# â”€â”€ Enums for strict validation â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class RegionEnum(str, Enum):
     littoral   = "Littoral"
@@ -71,7 +71,7 @@ class BusinessTypeEnum(str, Enum):
     cooperative         = "Cooperative"
 
 
-# ── V2 Business Registration ─────────────────────────────────
+# â”€â”€ V2 Business Registration â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class BusinessRegistrationV2(BaseModel):
     """
@@ -100,7 +100,7 @@ class BusinessRegistrationV2(BaseModel):
     years_of_experience: int   = Field(..., ge=0)
     owner_hours_per_week: int  = Field(default=40, ge=1, le=168)
 
-    # ── NEW V3 FIELDS ──
+    # â”€â”€ NEW V3 FIELDS â”€â”€
     year_started:            int  = Field(..., ge=1950, le=2026, description="Year the business was started")
     has_business_plan:       bool = Field(default=False)
     formal_financial_records: bool = Field(default=False)
@@ -140,13 +140,43 @@ class BusinessProfileUpdateV2(BaseModel):
     financing_method:           Optional[FinancingMethodEnum] = None
 
 
-# ── V2 Prediction ────────────────────────────────────────────
+# â”€â”€ V2 Prediction â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 class PredictionRequestV2(BaseModel):
     """Used by POST /api/v2/predict/generate"""
     business_id: str
 
 
-# ── Re-export V1 auth schemas (no changes needed) ────────────
+# â”€â”€ Re-export V1 auth schemas (no changes needed) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Auth, communication, and dashboard schemas are identical in
-# V1 and V2 — import directly from app.schemas in routers
+# V1 and V2 â€” import directly from app.schemas in routers
+
+class IntelligenceRefreshRequest(BaseModel):
+    """Controls how many items each trusted source should fetch during refresh."""
+    limit_per_source: int = Field(default=20, ge=1, le=50)
+
+
+class IntelligenceSourceCreate(BaseModel):
+    """Creates a trusted online source for market intelligence ingestion."""
+    source_name: str = Field(..., min_length=2, max_length=120)
+    source_url: str = Field(..., min_length=8, max_length=600)
+    source_type: str = Field(default="rss", pattern="^(rss|atom)$")
+    category: str = Field(default="market", max_length=60)
+    country: str = Field(default="Cameroon", max_length=80)
+    is_active: bool = True
+
+
+class IntelligenceItemResponse(BaseModel):
+    """Public shape returned to web/mobile market intelligence screens."""
+    id: Optional[str] = None
+    title: str
+    summary: Optional[str] = None
+    source_name: str
+    original_url: str
+    category: str
+    industries: list[str] = []
+    regions: list[str] = []
+    country: Optional[str] = None
+    published_at: Optional[str] = None
+    fetched_at: Optional[str] = None
+    credibility_score: Optional[float] = None
